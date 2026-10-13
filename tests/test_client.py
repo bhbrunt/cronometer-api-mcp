@@ -938,6 +938,44 @@ def test_create_custom_food_extra_nutrients_overlap_raises(tmp_path):
         )
 
 
+# ---------------------------------------------------------------------------
+# create_custom_food: barcodes
+# ---------------------------------------------------------------------------
+
+
+def _create_test_food(client, **kwargs):
+    return client.create_custom_food(
+        "Test Food", calories=200, protein_g=10, fat_g=5, carbs_g=20, **kwargs
+    )
+
+
+def test_create_custom_food_sends_normalized_barcodes(tmp_path):
+    """Barcodes go out as the food's `barcodes` list of bare digit strings,
+    the shape get_food reports for branded foods."""
+    client, state = make_cold_client(tmp_path, [{"result": "SUCCESS", "id": 555}])
+
+    _create_test_food(client, barcodes=["0 49000 05010 3", "4006381333931"])
+
+    data = state["payloads"][0]["data"]
+    assert data["barcodes"] == ["049000050103", "4006381333931"]
+
+
+def test_create_custom_food_without_barcodes_sends_empty_list(tmp_path):
+    client, state = make_cold_client(tmp_path, [{"result": "SUCCESS", "id": 555}])
+
+    _create_test_food(client)
+
+    assert state["payloads"][0]["data"]["barcodes"] == []
+
+
+def test_create_custom_food_bad_barcode_raises_before_request(tmp_path):
+    client, state = make_cold_client(tmp_path, [{"result": "SUCCESS", "id": 555}])
+
+    with pytest.raises(ValueError, match="check digit"):
+        _create_test_food(client, barcodes=["4006381333932"])
+    assert state["payloads"] == []
+
+
 def test_enrich_diary_no_servings_skips_lookup(tmp_path):
     client = _enrich_client(tmp_path)
     calls = {"n": 0}

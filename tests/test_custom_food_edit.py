@@ -386,6 +386,42 @@ def test_update_custom_food_extra_nutrients(tmp_path):
         client2.update_custom_food(FOOD_ID, extra_nutrients={204: 1.0})
 
 
+def test_update_custom_food_replaces_barcodes(tmp_path):
+    """barcodes replaces the whole list, normalized; nothing else changes."""
+    client, state = make_cold_client(tmp_path, [custom_food(barcodes=["96385074"]), OK])
+
+    client.update_custom_food(FOOD_ID, barcodes=["0 49000 05010 3"])
+
+    data = state["payloads"][1]["data"]
+    assert data["barcodes"] == ["049000050103"]
+    assert data["nutrients"] == custom_food()["nutrients"]
+    assert data["measures"] == custom_food()["measures"]
+
+
+def test_update_custom_food_empty_barcodes_clears_them(tmp_path):
+    client, state = make_cold_client(tmp_path, [custom_food(barcodes=["96385074"]), OK])
+
+    client.update_custom_food(FOOD_ID, barcodes=[])
+
+    assert state["payloads"][1]["data"]["barcodes"] == []
+
+
+def test_update_custom_food_keeps_barcodes_when_not_passed(tmp_path):
+    client, state = make_cold_client(tmp_path, [custom_food(barcodes=["96385074"]), OK])
+
+    client.update_custom_food(FOOD_ID, name="Renamed")
+
+    assert state["payloads"][1]["data"]["barcodes"] == ["96385074"]
+
+
+def test_update_custom_food_rejects_bad_barcode_before_fetch(tmp_path):
+    client, state = make_cold_client(tmp_path, [])
+
+    with pytest.raises(ValueError, match="check digit"):
+        client.update_custom_food(FOOD_ID, barcodes=["4006381333932"])
+    assert state["payloads"] == []
+
+
 def test_update_custom_food_refuses_database_foods(tmp_path):
     """Only user-created foods may be edited; a database food is rejected
     before anything is sent to add_food."""

@@ -563,6 +563,7 @@ def get_food_details(food_id: int) -> str:
                 "name": data.get("name"),
                 "default_measure_id": data.get("defaultMeasureId"),
                 "measures": measures,
+                "barcodes": data.get("barcodes", []),
                 "nutrients": data.get("nutrients", []),
             }
         )
@@ -589,6 +590,7 @@ def add_custom_food(
     extra_nutrients: dict[int, float] | None = None,
     serving_name: str = "1 serving",
     serving_grams: float = 100.0,
+    barcodes: list[str] | None = None,
 ) -> str:
     """Create a custom food in Cronometer with specified nutrition.
 
@@ -613,6 +615,12 @@ def add_custom_food(
             named macro args already cover.
         serving_name: Name for the serving size (default "1 serving").
         serving_grams: Weight of one serving in grams (default 100).
+        barcodes: Product barcodes (EAN-13, UPC-A, EAN-8, UPC-E or GTIN-14),
+            e.g. the digits printed under the bars on the package; spaces and
+            dashes are ignored. Scanning one of them in the Cronometer app
+            then finds this food (search_foods does not match barcodes). The
+            check digit is verified, so a misread digit is rejected rather
+            than saved.
     """
     try:
         client = _get_client()
@@ -629,6 +637,7 @@ def add_custom_food(
             extra_nutrients=extra_nutrients,
             serving_name=serving_name,
             serving_grams=serving_grams,
+            barcodes=barcodes,
         )
 
         # Fetch back to get the server-assigned measure_id
@@ -663,6 +672,7 @@ def update_custom_food(
     serving_name: str | None = None,
     serving_grams: float | None = None,
     serving_quantity: float | None = None,
+    barcodes: list[str] | None = None,
 ) -> str:
     """Edit an existing custom food (one you created) in place.
 
@@ -703,6 +713,9 @@ def update_custom_food(
             gives "3 cookies = 30 g". To keep the per-unit weight, also pass
             serving_grams (45 here). Check the result with get_food_details,
             which lists each measure's quantity.
+        barcodes: Replaces the food's barcodes (see add_custom_food for the
+            accepted formats); pass [] to remove them all. To add one, pass
+            the current barcodes from get_food_details plus the new one.
     """
     try:
         client = _get_client()
@@ -721,6 +734,7 @@ def update_custom_food(
             serving_name=serving_name,
             serving_grams=serving_grams,
             serving_quantity=serving_quantity,
+            barcodes=barcodes,
         )
         return _ok({"food_id": result["food_id"], "name": result["name"]})
     except Exception as e:

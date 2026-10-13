@@ -27,6 +27,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 
+from .barcode import normalize_barcodes
+
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://mobile.cronometer.com"
@@ -659,6 +661,7 @@ class CronometerClient:
         extra_nutrients: dict[int, float] | None = None,
         serving_name: str = "1 serving",
         serving_grams: float = 100.0,
+        barcodes: list[str] | None = None,
     ) -> dict:
         """Create a custom food in Cronometer.
 
@@ -676,9 +679,14 @@ class CronometerClient:
                 Must not reuse an ID already written by the named macro args
                 above; doing so raises ValueError rather than silently
                 duplicating or shadowing an entry.
+            barcodes: Product barcodes (EAN/UPC/GTIN) to attach; scanning one
+                in the app finds this food. Spaces and dashes are stripped and
+                the check digit verified; a bad code raises ValueError.
 
         Returns {"food_id": int, "measure_id": int | None}.
         """
+        barcodes = normalize_barcodes(barcodes or [])
+
         # Cronometer stores nutrients per 100g -- normalize from per-serving.
         scale = 100.0 / serving_grams if serving_grams > 0 else 1.0
 
@@ -756,6 +764,7 @@ class CronometerClient:
                 "nutrients": nutrients,
                 "properties": {},
                 "foodTags": [],
+                "barcodes": barcodes,
             },
             "config": {"call_version": 1},
         }
@@ -846,6 +855,7 @@ class CronometerClient:
         serving_name: str | None = None,
         serving_grams: float | None = None,
         serving_quantity: float | None = None,
+        barcodes: list[str] | None = None,
     ) -> dict:
         """Edit a user-created custom food in place.
 
@@ -865,6 +875,9 @@ class CronometerClient:
         serving_name ("2 cookies") is moved into the quantity for the same
         reason. A quantity set without serving_grams keeps the total weight,
         so the per-unit weight changes.
+
+        barcodes replaces the food's whole barcode list ([] clears it) and is
+        validated like create_custom_food's.
 
         Returns {"food_id": int, "name": str}.
         """
@@ -897,8 +910,14 @@ class CronometerClient:
             if v is not None and not (math.isfinite(v) and v > 0):
                 raise ValueError(f"{label} must be a positive number, got {v!r}")
 
+        if barcodes is not None:
+            barcodes = normalize_barcodes(barcodes)
+
         with self._food_lock(food_id):
             food = self._get_custom_food(food_id)
+
+            if barcodes is not None:
+                food["barcodes"] = barcodes
 
             if name is not None:
                 old_name = food.get("name")
